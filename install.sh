@@ -8,4 +8,4 @@ mkdir -p "$HOME/.claude/skills"
 if [ -L "$target" ]; then rm "$target"
 elif [ -e "$target" ]; then echo "$target 已存在而且不是捷徑，請自己處理" >&2; exit 1; fi
 ln -s "$repo" "$target"
-echo "已接上 whisper -> $target；關掉再重開 Claude Code 就會看到。"
+echo "已接上 whisper -> ${target}；關掉再重開 Claude Code 就會看到。"
