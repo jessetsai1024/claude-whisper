@@ -1,0 +1,7 @@
+{
+  "name": "whisper",
+  "version": "0.1.0",
+  "description": "悄悄話：每一輪答完，分叉去問「剛剛心裡其實在想什麼」，一句小字浮在輸入框上面。/whisper 開面板看這場全部的、/whisper 1~3 嘴碎度、/whisper off 關掉",
+  "author": { "name": "Jesse & 螢" },
+  "types": "./types/index.d.ts"
+}
