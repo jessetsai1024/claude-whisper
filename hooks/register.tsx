@@ -8,6 +8,8 @@ const PANE = 'whisper'
 const STORE_KEY = 'settings'
 // 側邊欄縮在輸入框上面時拿不到真正的高度，用這個當作可用列數
 const INLINE_ROWS = 30
+// 分叉碰到限流或伺服器忙，等這麼久再試一次（只試一次）
+const RETRY_MS = 3000
 
 const view = atom({ plugin: 'whisper', key: 'view' } as const, { kind: 'hidden' } as View)
 const log = atom({ plugin: 'whisper', key: 'log' } as const, [] as Entry[])
@@ -17,6 +19,8 @@ let settings: Settings = DEFAULT_SETTINGS
 // 紀錄檔：路徑第一次要寫時才算（要問 HOME 和 session id），內容整份留在記憶裡，每次寫整份
 let logPath: string | null = null
 let logText: string | null = null
+// 分叉失敗的原因，講過的就不再講（熱重載會清掉，無妨）
+const loggedReasons = new Set<string>()
 
 async function saveSettings($: EngineInterface, next: Settings): Promise<void> {
   settings = next
@@ -67,6 +71,7 @@ async function openPane($: EngineInterface): Promise<void> {
  *     設定存 $.store，下次開視窗還在。
  *   - 面板列這場全部的悄悄話，最新在上面：時間 心情 那句話；最上面一行是嘴碎度、幾句、分叉讀寫了多少 token。
  *   - 幫手的輪（帶 agentId）不理；主人打斷的輪、出錯的輪不理。
+ *   - 分叉回 429／5xx／沒回應時等 3 秒再試一次；還是失敗就放棄這輪，並在對話裡留一行原因（同一種原因一場只留一次）。
  * 【設計備註】問法在 whisper.ts 的 forkPrompt，要改語氣改那裡。這一行畫在其他 mod 的樹下面
  *   （next(e) 的結果先畫），所以跟毛毛、next-steps 可以共存。
  */
@@ -98,7 +103,12 @@ export const register: Register = on => {
     void (async () => {
       let entry: Entry | null = null
       try {
-        const reply = await $.model.fork({ prompt: forkPrompt(settings.level) })
+        let reply = await $.model.fork({ prompt: forkPrompt(settings.level) })
+        // 限流（429）、伺服器忙（5xx）、連線斷掉（status null）：等三秒再試一次就好，別讓一句悄悄話白白沒了
+        if (!reply.isAnswered && reply.reason === 'api-error' && (reply.status === null || reply.status === 429 || reply.status >= 500)) {
+          await $.clock.sleep(RETRY_MS)
+          reply = await $.model.fork({ prompt: forkPrompt(settings.level) })
+        }
         if (reply.isAnswered) {
           const parsed = parseReply(reply.text)
           if (parsed !== null) {
@@ -116,10 +126,15 @@ export const register: Register = on => {
             }
           }
         } else {
-          $.ui.log(`whisper: 分叉沒回答（${reply.reason}）`)
+          // 同一種失敗一場只講一次，不要每輪都在對話裡冒一行
+          const why = reply.reason === 'api-error' ? `api-error ${reply.status ?? 'no-response'}` : reply.reason
+          if (!loggedReasons.has(why)) {
+            loggedReasons.add(why)
+            $.ui.log(`分叉沒回答（${why}）；同一種原因這場只提醒這一次`)
+          }
         }
       } catch (error) {
-        $.ui.log(`whisper: 分叉失敗 ${String(error)}`)
+        $.ui.log(`分叉失敗 ${String(error)}`)
       }
       // 等的時候新的一輪已經開始（或另一輪結束）：這句作廢
       const now = await read($, view)
@@ -131,7 +146,7 @@ export const register: Register = on => {
       const kept = entry
       await update($, log, list => [...list, kept].slice(-LOG_MAX))
       await show($, { kind: 'show', turnId, entry: kept })
-      await appendLog($, kept).catch(error => $.ui.log(`whisper: 寫紀錄失敗 ${String(error)}`))
+      await appendLog($, kept).catch(error => $.ui.log(`寫紀錄失敗 ${String(error)}`))
     })()
     return result
   })
@@ -226,6 +241,9 @@ export const register: Register = on => {
 //   分叉要幾秒，等它會拖慢那一輪的收尾；回來時用 view 裡的 turnId 對，對不上就作廢。
 // 2026-10-05 紀錄檔用「整份留在記憶、每次寫整份」：$.fs 只有 write 沒有 append。熱重載後記憶是空的，
 //   第一次寫前先 read 一次補回來。
+// 2026-10-06 主人隔壁 session 第一次用就看到「分叉沒回答（api-error）」，沒狀態碼查不出原因：改成印狀態碼、
+//   429／5xx／null 等 3 秒重試一次、同一原因一場只提醒一次。$.clock.sleep 在分叉的那個 detached 區塊裡用，
+//   那裡已經不在 dispatch 的預算內（照 next-steps 的做法）。
 // 2026-10-06 band 上本來有「追問」「噓」兩顆鈕，主人說多餘（新一輪開始就自動消失、追問直接打字），拿掉了；
 //   $.prompt.fill 和 $.ui.toast 因此不再用到。
 // 2026-10-05 band 的樹先畫 next(e) 的結果再畫自己：毛毛（maomao）也畫在 AbovePrompt，不這樣做會蓋掉牠。
