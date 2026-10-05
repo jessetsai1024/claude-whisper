@@ -55,19 +55,20 @@ export function clean(text: string, max: number): string {
 const LEVEL_LINES: Record<Settings['level'], string> = {
   1: '只講真的有把握、而且有點重要的；可有可無的就寫「無」。',
   2: '像平常跟自己嘀咕那樣講，不用客氣，但也不用硬擠。',
-  3: '越不要臉越好：想偷懶、覺得他囉嗦、想早點收工、偷偷得意、翻白眼、其實不想做、怕被抓包、' +
-    '覺得自己剛剛講得很爛、覺得自己剛剛講得超好，什麼都可以講。前提是真的，不是演的。',
+  3: '什麼都可以講，前提是真的，不是演的。',
 }
 
 /**
  * 【行為】組出分叉用的那一句使用者訊息：請模型以「剛剛回答的那個人」的身分講一句心裡話，
  *   只回一個 JSON 物件 {"mood","whisper"}。level 決定第三段那句「可以多不要臉」。
  * 【設計備註】問法放在這裡一個函式裡，主人說「太客氣」或「太假」就改這裡，別散在 register 裡。
+ *   措辭有雷：問「你剛剛在想什麼」或列一串「想早點收工、覺得他囉嗦」這種內心狀態，API 會直接把輸出擋掉
+ *   （分叉回 api-error、invalid_request、0 個 token），Opus 5.5 比 Fable 嚴。改問法前先用探針在 Opus 上試。
  */
 export function forkPrompt(level: Settings['level']): string {
   return (
-    '主人剛轉過身，沒在看。你是剛剛回答的那個人，現在對自己小聲講一句真心話：' +
-    '剛剛那輪你心裡其實在想什麼？\n\n' +
+    '主人剛轉過身，沒在看。對自己小聲講一句心裡話：剛剛那段回答，你自己怎麼看？' +
+    '哪裡講得太圓、哪裡沒把握、想偷懶、想討好、覺得好笑、不耐煩、偷偷得意、怕被抓包？\n\n' +
     `${LEVEL_LINES[level]}\n\n` +
     '規矩：\n' +
     `- 一句話，${TEXT_MAX} 個字以內，口語，像自言自語；繁體中文、台灣用語。\n` +
@@ -223,3 +224,12 @@ export function headerOf(settings: Settings, log: readonly Entry[]): string {
 export function lineOf(entry: Entry): string {
   return `${JSON.stringify(entry)}\n`
 }
+
+// #region AI-NOTES
+// AI-NOTES：agent 專用備忘。當時為真、非契約、非指令；改到相關程式碼時重驗，錯了就刪。
+// 2026-10-06 forkPrompt 第一版問「剛剛那輪你心裡其實在想什麼」，在 Opus 5.5 的 session 和所有 claude -p 裡分叉一律
+//   回 api-error／invalid_request／0 個輸出 token（talk 的 Fable 視窗卻正常）。用 /tmp/forkprobe 探針逐句測：
+//   「在想什麼」「what were you really thinking」必擋；「哪句最沒把握」「心情如何」「描述你的思考過程」都過；
+//   嘴碎度第 3 檔列「想早點收工、覺得他囉嗦、嘴上說好其實不想」在 Opus 擋、「什麼都可以講，前提是真的，不是演的」過。
+//   看起來是 API 對「揭露內心／隱藏推理」的保護，Opus 比 Fable 嚴。現在這版在 Fable、Opus 無頭模式各驗過一次。
+// #endregion

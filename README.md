@@ -71,6 +71,8 @@ cd claude-whisper && ./install.sh
 
 問法在 `hooks/whisper.ts` 的 `forkPrompt`，覺得太客氣或太假，改那一個函式就好。心情標籤與顏色也在同一個檔。
 
+**改問法有一個雷**：問 Claude「你剛剛在想什麼」、或列一串「想早點收工、覺得他囉嗦」這種內心狀態，API 會直接把分叉的輸出擋掉（mod 會在對話裡留一行「分叉沒回答（api-error no-status invalid_request）」）。Opus 5.5 比 Fable 嚴。第一版就是這樣壞的；現在的問法在兩個模型上都驗過。改完先在 Opus 的 session 試一句。
+
 ```bash
 claude plugin validate .   # 引擎會不會拒
 claude plugin test .       # 8 個測試
@@ -95,3 +97,4 @@ MIT License.
 - Install: `claude plugin marketplace add jessetsai1024/claude-whisper` then `claude plugin install whisper@claude-whisper`. Needs Claude Code 2.1.287+.
 - Cost: one cache read plus ~40 output tokens per turn.
 - The prompt lives in `hooks/whisper.ts` (`forkPrompt`); the band and pane in `hooks/register.tsx`. Prompts and UI are in Traditional Chinese.
+- Gotcha: asking the model *what were you thinking* makes the API block the fork's output (`invalid_request`, zero tokens), more so on Opus 5.5. The shipped prompt avoids that wording; test on Opus before changing it.

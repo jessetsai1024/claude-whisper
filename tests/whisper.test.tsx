@@ -92,7 +92,9 @@ test('設定從 store 讀回來，壞的欄位用預設值', () => {
 })
 
 test('問法會隨嘴碎度換一句，而且只要 JSON', () => {
-  expect(forkPrompt(3)).toContain('越不要臉越好')
+  expect(forkPrompt(3)).toContain('前提是真的，不是演的')
+  // 這幾個字會讓 API 把分叉的輸出擋掉（見 whisper.ts 的 AI-NOTES），不能再出現
+  expect(forkPrompt(3)).not.toMatch(/在想什麼|不要臉|早點收工/)
   expect(forkPrompt(1)).toContain('只講真的有把握')
   expect(forkPrompt(2)).toContain('只回一個 JSON 物件')
   expect(forkPrompt(2)).toContain('mood 寫「無」')

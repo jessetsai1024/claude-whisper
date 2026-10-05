@@ -127,7 +127,7 @@ export const register: Register = on => {
           }
         } else {
           // 同一種失敗一場只講一次，不要每輪都在對話裡冒一行
-          const why = reply.reason === 'api-error' ? `api-error ${reply.status ?? 'no-response'}` : reply.reason
+          const why = reply.reason === 'api-error' ? `api-error ${reply.status ?? 'no-status'} ${reply.error}` : reply.reason
           if (!loggedReasons.has(why)) {
             loggedReasons.add(why)
             $.ui.log(`分叉沒回答（${why}）；同一種原因這場只提醒這一次`)
@@ -241,8 +241,8 @@ export const register: Register = on => {
 //   分叉要幾秒，等它會拖慢那一輪的收尾；回來時用 view 裡的 turnId 對，對不上就作廢。
 // 2026-10-05 紀錄檔用「整份留在記憶、每次寫整份」：$.fs 只有 write 沒有 append。熱重載後記憶是空的，
 //   第一次寫前先 read 一次補回來。
-// 2026-10-06 主人隔壁 session 第一次用就看到「分叉沒回答（api-error）」，沒狀態碼查不出原因：改成印狀態碼、
-//   429／5xx／null 等 3 秒重試一次、同一原因一場只提醒一次。$.clock.sleep 在分叉的那個 detached 區塊裡用，
+// 2026-10-06 主人隔壁 session 第一次用就看到「分叉沒回答（api-error）」：真正原因是問法踩到 API 的保護（見 whisper.ts
+//   的 AI-NOTES），已換問法。順便改成印狀態碼與錯誤種類、429／5xx／null 等 3 秒重試一次、同一原因一場只提醒一次。$.clock.sleep 在分叉的那個 detached 區塊裡用，
 //   那裡已經不在 dispatch 的預算內（照 next-steps 的做法）。
 // 2026-10-06 band 上本來有「追問」「噓」兩顆鈕，主人說多餘（新一輪開始就自動消失、追問直接打字），拿掉了；
 //   $.prompt.fill 和 $.ui.toast 因此不再用到。
